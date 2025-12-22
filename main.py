@@ -1,10 +1,8 @@
 import telebot
 from telebot import types
 from io import BytesIO
-from keep_alive import keep_alive  # <--- ADDED THIS
-
-# Start the web server to keep the bot alive
-keep_alive()  # <--- ADDED THIS
+import re
+import os
 
 # YOUR BOT TOKEN
 API_TOKEN = '8493753474:AAGifjXjyimF4GkxjfaIuGTVX9a0mkHXsS0'
@@ -16,8 +14,7 @@ user_prefixes = {}
 def get_reset_markup():
     """CREATES THE START OVER BUTTON"""
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("🔄 START OVER",
-                                     callback_data="reset_prefix")
+    btn = types.InlineKeyboardButton("🔄 START OVER", callback_data="reset_prefix")
     markup.add(btn)
     return markup
 
@@ -29,9 +26,9 @@ def send_welcome(message):
     welcome_text = (
         "<b>🎉 Welcome To BUBALULA BOT 🤖✨</b>\n\n"
         "<b>💥 Bot Created By @Lohit_69💎</b>\n\n"
-        "<b>📥 PLEASE SEND THE PREFIX YOU WANT TO FILTER 🔥 (EXAMPLE: 01785, 01965 )</b>"
+        "<b>📥 PLEASE SEND THE PREFIX YOU WANT TO FILTER 🔥</b>\n"
+        "<i>(Example: 01785, 01965)</i>"
     )
-
     bot.reply_to(message, welcome_text, parse_mode="HTML")
 
 @bot.callback_query_handler(func=lambda call: call.data == "reset_prefix")
@@ -39,13 +36,14 @@ def reset_prefix_callback(call):
     user_id = call.from_user.id
     user_prefixes.pop(user_id, None)
     bot.answer_callback_query(call.id, "CLEARED")
-    bot.send_message(call.message.chat.id,
-                     "<b>🔄 SETTINGS RESET. PLEASE SEND A NEW PREFIX.</b>",
-                     parse_mode="HTML")
+    bot.send_message(
+        call.message.chat.id,
+        "<b>🔄 SETTINGS RESET. PLEASE SEND A NEW PREFIX.</b>",
+        parse_mode="HTML"
+    )
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
-    # PREVENT BOT FROM TREATING COMMANDS AS PREFIXES
     if message.text.startswith('/'):
         return
 
@@ -57,19 +55,22 @@ def handle_all_messages(message):
         prefix = text.replace('+', '').replace(' ', '')
         user_prefixes[user_id] = prefix
         bot.reply_to(
-            message, f"<b>🎯 PREFIX SET TO: {prefix}</b>\n\n"
-            f"<b>📥 NOW PASTE YOUR NUMBER LIST. I WILL KEEP ONLY NUMBERS STARTING WITH {prefix}.</b>",
-            parse_mode="HTML")
+            message, 
+            f"<b>🎯 PREFIX SET TO: {prefix}</b>\n\n"
+            f"<b>📥 NOW PASTE YOUR NUMBER LIST.</b>",
+            parse_mode="HTML"
+        )
         return
 
     # STEP 2: PROCESSING THE LIST
     target_prefix = user_prefixes.get(user_id)
     lines = text.split('\n')
 
-    processed = [
-        "+" + num.strip() for num in lines
+    # Using 'set' to automatically remove duplicates
+    processed = sorted(list(set([
+        "+" + num.strip() for num in lines 
         if num.strip().startswith(target_prefix)
-    ]
+    ])))
 
     if processed:
         result_data = "\n".join(processed)
@@ -79,15 +80,25 @@ def handle_all_messages(message):
         bot.send_document(
             message.chat.id,
             bio,
-            caption=f"<b>✅ DONE! FOUND {len(processed)} NUMBERS.</b>",
+            caption=f"<b>✅ DONE! FOUND {len(processed)} UNIQUE NUMBERS.</b>",
             parse_mode="HTML",
-            reply_markup=get_reset_markup())
+            reply_markup=get_reset_markup()
+        )
     else:
         bot.reply_to(
             message,
             f"<b>❌ NO NUMBERS STARTING WITH {target_prefix} WERE FOUND.</b>",
             parse_mode="HTML",
-            reply_markup=get_reset_markup())
+            reply_markup=get_reset_markup()
+        )
 
-print("BOT IS RUNNING...")
-bot.infinity_polling()
+# --- STARTUP ---
+if __name__ == "__main__":
+    print("--- SYSTEM STARTING ---")
+    try:
+        # This keeps Railway happy by checking connectivity immediately
+        bot_info = bot.get_me()
+        print(f"--- SUCCESS: @{bot_info.username} IS ONLINE ---")
+        bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    except Exception as e:
+        print(f"--- FAILED TO START: {e} ---")
