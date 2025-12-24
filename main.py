@@ -8,11 +8,9 @@ import os
 API_TOKEN = '8493753474:AAGifjXjyimF4GkxjfaIuGTVX9a0mkHXsS0'
 bot = telebot.TeleBot(API_TOKEN)
 
-# DICTIONARY TO STORE THE PREFIX CHOICE
 user_prefixes = {}
 
 def get_reset_markup():
-    """CREATES THE START OVER BUTTON"""
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("🔄 START OVER", callback_data="reset_prefix")
     markup.add(btn)
@@ -22,7 +20,6 @@ def get_reset_markup():
 def send_welcome(message):
     user_id = message.from_user.id
     user_prefixes.pop(user_id, None)
-
     welcome_text = (
         "<b>🎉 Welcome To BUBALULA BOT 🤖✨</b>\n\n"
         "<b>💥 Bot Created By @Lohit_69💎</b>\n\n"
@@ -36,11 +33,7 @@ def reset_prefix_callback(call):
     user_id = call.from_user.id
     user_prefixes.pop(user_id, None)
     bot.answer_callback_query(call.id, "CLEARED")
-    bot.send_message(
-        call.message.chat.id,
-        "<b>🔄 SETTINGS RESET. PLEASE SEND A NEW PREFIX.</b>",
-        parse_mode="HTML"
-    )
+    bot.send_message(call.message.chat.id, "<b>🔄 SETTINGS RESET. PLEASE SEND A NEW PREFIX.</b>", parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
@@ -51,52 +44,44 @@ def handle_all_messages(message):
     text = message.text.strip()
 
     # STEP 1: SETTING THE PREFIX
+    # এখানে আমরা প্রিফিক্স থেকে + সরিয়ে নিচ্ছি যাতে সার্চ করতে সুবিধা হয়
     if user_id not in user_prefixes or len(text) < 7:
         prefix = text.replace('+', '').replace(' ', '')
         user_prefixes[user_id] = prefix
-        bot.reply_to(
-            message, 
-            f"<b>🎯 PREFIX SET TO: {prefix}</b>\n\n"
-            f"<b>📥 NOW PASTE YOUR NUMBER LIST.</b>",
-            parse_mode="HTML"
-        )
+        bot.reply_to(message, f"<b>🎯 PREFIX SET TO: {prefix}</b>\n\n<b>📥 NOW PASTE YOUR NUMBER LIST.</b>", parse_mode="HTML")
         return
 
     # STEP 2: PROCESSING THE LIST
     target_prefix = user_prefixes.get(user_id)
     lines = text.split('\n')
 
-    # Using 'set' to automatically remove duplicates
-    processed = sorted(list(set([
-        "+" + num.strip() for num in lines 
-        if num.strip().startswith(target_prefix)
-    ])))
+    processed_list = []
+    for num in lines:
+        clean_num = num.strip()
+        # এখানে নম্বরটির ভেতর থেকে + সরিয়ে চেক করছি প্রিফিক্সের সাথে মিলে কি না
+        search_num = clean_num.replace('+', '') 
+        
+        if search_num.startswith(target_prefix):
+            # আউটপুটে সব সময় + সহ দেখাবে
+            if not clean_num.startswith('+'):
+                processed_list.append("+" + clean_num)
+            else:
+                processed_list.append(clean_num)
+
+    # ইউনিক নম্বর রাখা এবং সর্ট করা
+    processed = sorted(list(set(processed_list)))
 
     if processed:
         result_data = "\n".join(processed)
         bio = BytesIO(result_data.encode('utf-8'))
         bio.name = f"Filtered_{target_prefix}.txt"
-
-        bot.send_document(
-            message.chat.id,
-            bio,
-            caption=f"<b>✅ DONE! FOUND {len(processed)} UNIQUE NUMBERS.</b>",
-            parse_mode="HTML",
-            reply_markup=get_reset_markup()
-        )
+        bot.send_document(message.chat.id, bio, caption=f"<b>✅ DONE! FOUND {len(processed)} UNIQUE NUMBERS.</b>", parse_mode="HTML", reply_markup=get_reset_markup())
     else:
-        bot.reply_to(
-            message,
-            f"<b>❌ NO NUMBERS STARTING WITH {target_prefix} WERE FOUND.</b>",
-            parse_mode="HTML",
-            reply_markup=get_reset_markup()
-        )
+        bot.reply_to(message, f"<b>❌ NO NUMBERS STARTING WITH {target_prefix} WERE FOUND.</b>", parse_mode="HTML", reply_markup=get_reset_markup())
 
-# --- STARTUP ---
 if __name__ == "__main__":
     print("--- SYSTEM STARTING ---")
     try:
-        # This keeps Railway happy by checking connectivity immediately
         bot_info = bot.get_me()
         print(f"--- SUCCESS: @{bot_info.username} IS ONLINE ---")
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
